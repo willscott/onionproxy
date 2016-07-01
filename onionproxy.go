@@ -3,13 +3,18 @@ package main
 import (
 	"flag"
 	"fmt"
+  "github.com/yawning/bulb"
+  "golang.org/x/net/proxy"
 	"io"
 	"log"
 	"net"
-)
+  "unsafe"
+ )
 
 var localAddr *string = flag.String("l", "localhost:9999", "listening address")
 var remoteAddr *string = flag.String("r", "google.com:80", "backend address")
+var torSocket *string = flag.String("s", "/var/run/tor/control", "Tor control socket")
+var cookieAuth *string = flag.String("c", "", "tor auth password")
 
 func Proxy(srvConn, cliConn *net.TCPConn) {
 	// channels to wait on the close event for each connection
@@ -62,13 +67,8 @@ func broker(dst, src net.Conn, srcClosed chan struct{}) {
 	srcClosed <- struct{}{}
 }
 
-func proxyConn(conn *net.TCPConn) {
-	rAddr, err := net.ResolveTCPAddr("tcp", *remoteAddr)
-	if err != nil {
-		panic(err)
-	}
-
-	rConn, err := net.DialTCP("tcp", nil, rAddr)
+func proxyConn(dialer *proxy.Dialer, conn *net.TCPConn) {
+	rConn, err := (*dialer).Dial("tcp", *remoteAddr)
 	if err != nil {
 		panic(err)
 	}
@@ -79,12 +79,12 @@ func proxyConn(conn *net.TCPConn) {
 	}
   my_ip, my_port, _ := net.SplitHostPort(conn.LocalAddr().String())
   rConn.Write([]byte(fmt.Sprintf("PROXY TCP4 %s %s %d %d\r\n", client_ip, my_ip, client_port, my_port)))
-  Proxy(conn, rConn)
+  Proxy(conn, (*net.TCPConn)(unsafe.Pointer(&rConn)))
 }
 
-func handleConn(in <-chan *net.TCPConn, out chan<- *net.TCPConn) {
+func handleConn(dialer *proxy.Dialer, in <-chan *net.TCPConn, out chan<- *net.TCPConn) {
 	for conn := range in {
-		proxyConn(conn)
+		proxyConn(dialer, conn)
 		out <- conn
 	}
 }
@@ -100,6 +100,21 @@ func main() {
 
 	fmt.Printf("Listening: %v\nProxying: %v\n\n", *localAddr, *remoteAddr)
 
+  tor, err := bulb.Dial("unix", *torSocket)
+  if err != nil {
+    panic(err)
+  }
+  defer tor.Close()
+
+  if err := tor.Authenticate(*cookieAuth); err != nil {
+    panic(err)
+  }
+
+  dialer, err := tor.Dialer(nil)
+  if err != nil {
+    panic(err)
+  }
+
 	addr, err := net.ResolveTCPAddr("tcp", *localAddr)
 	if err != nil {
 		panic(err)
@@ -109,11 +124,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+  defer listener.Close()
 
 	pending, complete := make(chan *net.TCPConn), make(chan *net.TCPConn)
 
 	for i := 0; i < 5; i++ {
-		go handleConn(pending, complete)
+		go handleConn(&dialer, pending, complete)
 	}
 	go closeConn(complete)
 
