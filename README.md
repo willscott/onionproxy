@@ -16,3 +16,4 @@ An instance of the proxy is parameterized by the following options:
 * ```-r thirteenchars.onion:80``` Where the proxy forwards.
 * ```-s /var/run/tor/control``` Where the tor control channel is.
 * ```-c passwordauth``` The tor auth password, if using password auth.
+* ```-p``` include a PROXY header on forwarded streams.

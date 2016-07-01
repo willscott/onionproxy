@@ -15,6 +15,7 @@ var localAddr *string = flag.String("l", "localhost:9999", "listening address")
 var remoteAddr *string = flag.String("r", "google.com:80", "backend address")
 var torSocket *string = flag.String("s", "/var/run/tor/control", "Tor control socket")
 var cookieAuth *string = flag.String("c", "", "tor auth password")
+var proxyheader *bool = flag.Bool("p", false, "Include a PROXY header")
 
 func Proxy(srvConn, cliConn *net.TCPConn) {
 	// channels to wait on the close event for each connection
@@ -73,12 +74,14 @@ func proxyConn(dialer *proxy.Dialer, conn *net.TCPConn) {
 		panic(err)
 	}
 
-  client_ip, client_port, err := net.SplitHostPort(conn.RemoteAddr().String())
-  if err != nil {
-		panic(err)
-	}
-  my_ip, my_port, _ := net.SplitHostPort(conn.LocalAddr().String())
-  rConn.Write([]byte(fmt.Sprintf("PROXY TCP4 %s %s %d %d\r\n", client_ip, my_ip, client_port, my_port)))
+  if (*proxyheader) {
+    client_ip, client_port, err := net.SplitHostPort(conn.RemoteAddr().String())
+    if err != nil {
+  		panic(err)
+  	}
+    my_ip, my_port, _ := net.SplitHostPort(conn.LocalAddr().String())
+    rConn.Write([]byte(fmt.Sprintf("PROXY TCP4 %s %s %d %d\r\n", client_ip, my_ip, client_port, my_port)))
+  }
   Proxy(conn, (*net.TCPConn)(unsafe.Pointer(&rConn)))
 }
 
