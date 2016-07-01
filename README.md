@@ -12,8 +12,7 @@ Usage
 
 An instance of the proxy is parameterized by the following options:
 
-* ```Port``` and ```Host``` specify the interface and port on the local machine.
-* ```OnionService``` and ```OnionPort``` specify the backend.
-* ```SocksPort``` specifies where the local tor socks port is.
-* ```ActiveConnections``` and ```ConnectionTimeout``` specify how traffic is relayed.
-* ```ProxyHeader``` specifies whether a PROXY header is prefixed to streams.
+* ```-l localhost:9999``` Where the proxy listens.
+* ```-r thirteenchars.onion:80``` Where the proxy forwards.
+* ```-s /var/run/tor/control``` Where the tor control channel is.
+* ```-c passwordauth``` The tor auth password, if using password auth.
