@@ -3,13 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
-  "github.com/yawning/bulb"
-  "golang.org/x/net/proxy"
+	"github.com/yawning/bulb"
+	"golang.org/x/net/proxy"
 	"io"
 	"log"
 	"net"
-  "unsafe"
- )
+	"unsafe"
+)
 
 var localAddr *string = flag.String("l", "localhost:9999", "listening address")
 var remoteAddr *string = flag.String("r", "google.com:80", "backend address")
@@ -74,15 +74,15 @@ func proxyConn(dialer *proxy.Dialer, conn *net.TCPConn) {
 		panic(err)
 	}
 
-  if (*proxyheader) {
-    client_ip, client_port, err := net.SplitHostPort(conn.RemoteAddr().String())
-    if err != nil {
-  		panic(err)
-  	}
-    my_ip, my_port, _ := net.SplitHostPort(conn.LocalAddr().String())
-    rConn.Write([]byte(fmt.Sprintf("PROXY TCP4 %s %s %d %d\r\n", client_ip, my_ip, client_port, my_port)))
-  }
-  Proxy(conn, (*net.TCPConn)(unsafe.Pointer(&rConn)))
+	if *proxyheader {
+		client_ip, client_port, err := net.SplitHostPort(conn.RemoteAddr().String())
+		if err != nil {
+			panic(err)
+		}
+		my_ip, my_port, _ := net.SplitHostPort(conn.LocalAddr().String())
+		rConn.Write([]byte(fmt.Sprintf("PROXY TCP4 %s %s %d %d\r\n", client_ip, my_ip, client_port, my_port)))
+	}
+	Proxy(conn, (*net.TCPConn)(unsafe.Pointer(&rConn)))
 }
 
 func handleConn(dialer *proxy.Dialer, in <-chan *net.TCPConn, out chan<- *net.TCPConn) {
@@ -103,20 +103,20 @@ func main() {
 
 	fmt.Printf("Listening: %v\nProxying: %v\n\n", *localAddr, *remoteAddr)
 
-  tor, err := bulb.Dial("unix", *torSocket)
-  if err != nil {
-    panic(err)
-  }
-  defer tor.Close()
+	tor, err := bulb.Dial("unix", *torSocket)
+	if err != nil {
+		panic(err)
+	}
+	defer tor.Close()
 
-  if err := tor.Authenticate(*cookieAuth); err != nil {
-    panic(err)
-  }
+	if err := tor.Authenticate(*cookieAuth); err != nil {
+		panic(err)
+	}
 
-  dialer, err := tor.Dialer(nil)
-  if err != nil {
-    panic(err)
-  }
+	dialer, err := tor.Dialer(nil)
+	if err != nil {
+		panic(err)
+	}
 
 	addr, err := net.ResolveTCPAddr("tcp", *localAddr)
 	if err != nil {
@@ -127,7 +127,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-  defer listener.Close()
+	defer listener.Close()
 
 	pending, complete := make(chan *net.TCPConn), make(chan *net.TCPConn)
 
