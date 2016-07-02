@@ -77,7 +77,7 @@ func proxyConn(dialer *proxy.Dialer, conn *net.TCPConn) {
 			panic(err)
 		}
 		my_ip, my_port, _ := net.SplitHostPort(conn.LocalAddr().String())
-		rConn.Write([]byte(fmt.Sprintf("PROXY TCP4 %s %s %d %d\r\n", client_ip, my_ip, client_port, my_port)))
+		rConn.Write([]byte(fmt.Sprintf("PROXY TCP4 %s %s %s %s\r\n", client_ip, my_ip, client_port, my_port)))
 	}
 
 	back, okBack := (rConn).(*net.TCPConn)
