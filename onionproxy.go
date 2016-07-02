@@ -6,13 +6,12 @@ import (
 	"github.com/yawning/bulb"
 	"golang.org/x/net/proxy"
 	"io"
-	"log"
 	"net"
-	"unsafe"
 )
 
 var localAddr *string = flag.String("l", "localhost:9999", "listening address")
 var remoteAddr *string = flag.String("r", "google.com:80", "backend address")
+var useTor *bool = flag.Bool("t", true, "Use Tor for backend")
 var torSocket *string = flag.String("s", "/var/run/tor/control", "Tor control socket")
 var cookieAuth *string = flag.String("c", "", "tor auth password")
 var proxyheader *bool = flag.Bool("p", false, "Include a PROXY header")
@@ -58,13 +57,11 @@ func broker(dst, src net.Conn, srcClosed chan struct{}) {
 	// net.Conn->net.Conn transfers, which aren't needed). This would also let
 	// us adjust buffersize.
 	_, err := io.Copy(dst, src)
-
 	if err != nil {
-		log.Printf("Copy error: %s", err)
+		srcClosed <- struct{}{}
+		return
 	}
-	if err := src.Close(); err != nil {
-		log.Printf("Close error: %s", err)
-	}
+	src.Close()
 	srcClosed <- struct{}{}
 }
 
@@ -82,12 +79,38 @@ func proxyConn(dialer *proxy.Dialer, conn *net.TCPConn) {
 		my_ip, my_port, _ := net.SplitHostPort(conn.LocalAddr().String())
 		rConn.Write([]byte(fmt.Sprintf("PROXY TCP4 %s %s %d %d\r\n", client_ip, my_ip, client_port, my_port)))
 	}
-	Proxy(conn, (*net.TCPConn)(unsafe.Pointer(&rConn)))
+
+	back, okBack := (rConn).(*net.TCPConn)
+	if !okBack {
+		return
+	}
+
+	Proxy(conn, back)
 }
 
-func handleConn(dialer *proxy.Dialer, in <-chan *net.TCPConn, out chan<- *net.TCPConn) {
+func handleConn(in <-chan *net.TCPConn, out chan<- *net.TCPConn) {
+	var dialer proxy.Dialer
+	if *useTor {
+		tor, err := bulb.Dial("unix", *torSocket)
+		if err != nil {
+			panic(err)
+		}
+		defer tor.Close()
+
+		if err := tor.Authenticate(*cookieAuth); err != nil {
+			panic(err)
+		}
+
+		dialer, err = tor.Dialer(nil)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		dialer = proxy.Direct
+	}
+
 	for conn := range in {
-		proxyConn(dialer, conn)
+		proxyConn(&dialer, conn)
 		out <- conn
 	}
 }
@@ -103,21 +126,6 @@ func main() {
 
 	fmt.Printf("Listening: %v\nProxying: %v\n\n", *localAddr, *remoteAddr)
 
-	tor, err := bulb.Dial("unix", *torSocket)
-	if err != nil {
-		panic(err)
-	}
-	defer tor.Close()
-
-	if err := tor.Authenticate(*cookieAuth); err != nil {
-		panic(err)
-	}
-
-	dialer, err := tor.Dialer(nil)
-	if err != nil {
-		panic(err)
-	}
-
 	addr, err := net.ResolveTCPAddr("tcp", *localAddr)
 	if err != nil {
 		panic(err)
@@ -132,7 +140,7 @@ func main() {
 	pending, complete := make(chan *net.TCPConn), make(chan *net.TCPConn)
 
 	for i := 0; i < 5; i++ {
-		go handleConn(&dialer, pending, complete)
+		go handleConn(pending, complete)
 	}
 	go closeConn(complete)
 
