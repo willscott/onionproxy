@@ -68,13 +68,17 @@ func broker(dst, src net.Conn, srcClosed chan struct{}) {
 func proxyConn(dialer *proxy.Dialer, conn *net.TCPConn) {
 	rConn, err := (*dialer).Dial("tcp", *remoteAddr)
 	if err != nil {
-		panic(err)
+		fmt.Printf("Failed to relay to backend: %s\n", err)
+		conn.Close()
+		return
 	}
 
 	if *proxyheader {
 		client_ip, client_port, err := net.SplitHostPort(conn.RemoteAddr().String())
 		if err != nil {
-			panic(err)
+			fmt.Printf("Failed to parse client endpoint: %s\n", err)
+			conn.Close()
+			return
 		}
 		my_ip, my_port, _ := net.SplitHostPort(conn.LocalAddr().String())
 		rConn.Write([]byte(fmt.Sprintf("PROXY TCP4 %s %s %s %s\r\n", client_ip, my_ip, client_port, my_port)))
@@ -82,6 +86,8 @@ func proxyConn(dialer *proxy.Dialer, conn *net.TCPConn) {
 
 	back, okBack := (rConn).(*net.TCPConn)
 	if !okBack {
+	  fmt.Printf("Failed to create connection to backend.\n")
+		conn.Close()
 		return
 	}
 
